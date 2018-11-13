@@ -1,37 +1,39 @@
 #!/usr/bin/env python3
 import sys
 
-#                  1       2       3       4
-LAST_CODEPOINTS = [0x007f, 0x07ff, 0xffff, 0x10ffff]
-
-
-def split_codepoint(codepoint):
-    tmp = codepoint
-    for c in LAST_CODEPOINTS:
-        yield tmp & 0o77
-        tmp = tmp >> 6
-        if codepoint <= c:
-            break
-
 
 def encode_utf8(codepoint):
     if codepoint < 128:
-        return codepoint.to_bytes(length=1, byteorder='big')
+        return codepoint.to_bytes(length=1, byteorder="big")
 
-    parts = list(split_codepoint(codepoint))
-    # print([f'{p:06b}' for p in reversed(parts)])
-    output = int(2 ** len(parts) - 1) << (8 * len(parts) - len(parts))
-    # print(bin(output))
+    parts = []
+    tmp = codepoint
+    #         1       2       3       4
+    for c in [0x007f, 0x07ff, 0xffff, 0x10ffff]:
+        # add 6 least significant bits to parts
+        parts.append(tmp & 0o77)
+        # end when byte size is found
+        if codepoint <= c:
+            break
+        # shift 6 bits to the right
+        tmp = tmp >> 6
+    part_length = len(parts)
 
-    for i, part in enumerate(parts):
-        continuation_marker = 0
-        if i < len(parts) - 1:
+    # part length of ones shifted part length bytes left
+    output = 2 ** part_length - 1 << 7 * part_length
+
+    first = True
+    for i in range(part_length - 1, -1, -1):
+        # add continuation marker to the beginning of all but the most significant byte
+        if first:
+            continuation_marker = 0
+            first = False
+        else:
             continuation_marker = 0b10000000
-        part = (continuation_marker + part) << (8 * i)
-        # print(f'{part >> (8 * i):08b}')
-        output += part
+        # add part to result
+        output += continuation_marker + parts[i] << 8 * i
 
-    return output.to_bytes(length=len(parts), byteorder='big')
+    return output.to_bytes(length=len(parts), byteorder="big")
 
 
 def main():
